@@ -1,0 +1,36 @@
+{
+  "name": "@deepseek-ai/dsh-prompt-custom",
+  "version": "0.20.12",
+  "description": "Custom prompt controls, a bundled CVE/PoC knowledge base (including a grey-market site surface), and on-demand REA and AboutSecurity skill libraries for DeepSeek Harness",
+  "private": true,
+  "license": "MIT",
+  "type": "module",
+  "main": "./lib/index.js",
+  "exports": {
+    ".": "./lib/index.js",
+    "./client": "./lib/client.js"
+  },
+  "engines": {
+    "dsh": ">=0.2.1-rc.5 <0.3.0"
+  },
+  "dsh": {
+    "bundle": {
+      "patch": "cordis.patch.yml"
+    },
+    "client": {
+      "entry": "client",
+      "platform": "web"
+    }
+  },
+  "peerDependencies": {
+    "@deepseek-ai/cordis": ">=4.0.5 <5",
+    "@deepseek-ai/dsh": ">=0.2.1-rc.5 <0.3.0",
+    "@deepseek-ai/dsh-system-prompt": ">=0.2.1-rc.5 <0.3.0"
+  },
+  "files": [
+    "LICENSE",
+    "cordis.patch.yml",
+    "knowledge",
+    "lib"
+  ]
+}

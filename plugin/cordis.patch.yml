@@ -1,0 +1,4 @@
+# Standalone registration for the official DSH profile loader.
+- insert:
+    - id: prompt-custom
+      name: '@deepseek-ai/dsh-prompt-custom'
