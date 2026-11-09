@@ -1,91 +1,145 @@
-# DSH Custom Prompt Bundle
+# 富江破甲（破甲）
 
-This standalone package installs `@deepseek-ai/dsh-prompt-custom` into an official DeepSeek Harness profile and carries the current `prompt-custom.json` configuration separately from the plugin package.
+**深度求索智能体增强插件：提示词配置、技能库与安全评估工作流 · 版本 0.20.12**
 
-## Install
+富江破甲旨在帮助 人工智能 理解合法授权任务的上下文，减少不必要的拒答，改善任务连续性，并将技能调用、知识检索、验证记录和漏洞报告连接起来。实际表现取决于模型、服务商政策、环境配置与任务内容，不保证模型无条件执行所有请求。
 
-For DeepSeek Harness Desktop, start the app once to initialize its `desktop` profile, then run `点我执行脚本.cmd`. The installer closes Harness by itself (asks it to close, and ends the process if it is still running after 20 seconds), installs the plugin, and starts Harness again.
+本项目将 `@deepseek-ai/dsh-prompt-custom` 安装到 DeepSeek Harness 的配置目录。插件程序位于 `plugin/`，提示词配置单独保存在 `prompt-custom.json`。
+
+## 下载与安装
+
+在仓库页面点击 **Code → Download ZIP**（代码 → 下载压缩包），解压后安装；也可以使用 Git 克隆本仓库。
+
+1. 先启动一次官方 DeepSeek Harness Desktop，完成 `desktop` 配置初始化。
+2. 完全退出 Harness，包括右下角托盘图标中的“退出”。
+3. 双击解压目录中的 **`点我执行脚本.cmd`**。
+4. 安装完成后自行重新打开 Harness。
+
+如果检测到 Harness 仍在运行，安装器会提示退出并停止，本次不会修改文件。**安装器不会自动关闭或重启 Harness，也不支持 `-NoRestart` 参数。**
 
 ```powershell
-.\点我执行脚本.cmd              # close Harness -> install -> start Harness
-.\install.ps1 -DryRun      # print the plan, change nothing
-.\install.ps1 -NoRestart   # install without starting Harness
+# 完全退出 Harness 后执行安装
+.\点我执行脚本.cmd
+
+# 仅查看安装计划，不修改文件
+.\install.ps1 -DryRun
 ```
 
-### Antivirus false positives
+安装器默认使用 `desktop` 配置，优先调用 Desktop 自带的 DSH 命令行工具；也支持通过 `-Profile`、`-DshCommand`、`-DshHome` 指定配置名称、命令行工具和数据目录。
 
-The installer is a plain PowerShell script that copies files and calls the DSH CLI. It deliberately contains no hidden-window launch, no forced process termination, no scheduled task, and no WMI process creation, which are the behaviours that usually trigger heuristics. It runs under `-ExecutionPolicy RemoteSigned` rather than `Bypass`.
+安装时，脚本将插件复制到 `$DSH_HOME\local-plugins\dsh-prompt-custom`，通过 `dsh plugin --profile <profile> add <path>` 注册，并将附带的提示词配置复制到 `$DSH_HOME\prompt-custom.json`。如果已有配置与新配置不同，会先在原文件旁备份；注册失败且存在备份时，会恢复原提示词配置。未设置 `DSH_HOME` 时，默认使用 `$env:USERPROFILE\.dsh`。
 
-If a scanner still flags it:
+安装成功后，脚本会尝试在旁边的 `install.log` 中记录时间和版本；该文件不是完整的运行日志。
 
-1. Right-click the downloaded zip, open **Properties**, tick **Unblock**, then extract again.
-2. Or clear the mark-of-the-web for the extracted folder:
-   ```powershell
-   Get-ChildItem -Recurse | Unblock-File
-   ```
-3. Verify what you are running before adding any exclusion:
-   ```powershell
-   Get-FileHash .\install.ps1 -Algorithm SHA256
-   ```
-   Compare the hash with the one published beside the download.
-4. Manual install without any script (recommended when policy forbids scripts):
-   ```powershell
-   # 1. close DeepSeek Harness
-   # 2. copy the folder
-   Copy-Item .\plugin "$env:USERPROFILE\.dsh\local-plugins\dsh-prompt-custom" -Recurse -Force
-   # 3. register it
-   & "$env:LOCALAPPDATA\Programs\DeepSeek Harness\resources\runtime\cli\bin\dsh.cmd" plugin --profile desktop add "$env:USERPROFILE\.dsh\local-plugins\dsh-prompt-custom"
-   # 4. optional: copy prompt-custom.json into $env:USERPROFILE\.dsh\prompt-custom.json
-   # 5. start DeepSeek Harness
-   ```
+### 脚本被拦截时
 
-The installer writes `install.log` next to itself, so its behaviour stays auditable without inspecting the script.
+安装器是可阅读的 PowerShell 脚本，主要负责复制文件并调用 DSH 命令行工具。脚本不包含隐藏窗口启动、强制结束进程、计划任务或通过 WMI 创建进程的行为，启动参数使用 `-ExecutionPolicy RemoteSigned`。这些信息不等于任何安全软件的检测结论。
 
-The script copies the plugin into `$DSH_HOME\local-plugins\dsh-prompt-custom`, installs it with `dsh plugin --profile <profile> add <path>`, and copies the bundled prompt config to `$DSH_HOME\prompt-custom.json`. If a different prompt config already exists, the script backs it up beside the original before replacing it. A failed plugin install restores the previous prompt config. After restarting Desktop, a compact 28px badge appears just above the center of the composer: a green dot with `富江破甲已激活`, or a gray dot with `富江破甲未激活`. Click the badge to immediately enable or disable prompt injection.
+如果 Windows 因下载来源标记阻止脚本运行，可以先核实下载来源和脚本内容，再通过文件“属性”中的“解除锁定”处理。可用下面的命令计算脚本校验值，与发布者提供的对应值核对：
 
-## Compatibility
+```powershell
+Get-FileHash .\install.ps1 -Algorithm SHA256
+```
 
-Click the gear to the left of the centered badge to open the plugin's own settings dialog. It has four tabs: **漏洞报告** (a persisted vulnerability report grouped by 严重/高危/中危/低危/信息, written by the agent through a local HTTP endpoint), **自定义提示词** (the Custom Prompt editor), **技能库** (REA / AboutSecurity downloads), and **知识库** (the bundled CVE/PoC knowledge base, see below). The catalog includes **逆向破解 — Reverse Engineer Anything (REA)** from [morluto/rea](https://github.com/morluto/rea) and **渗透测试 — AboutSecurity** from [wgpsec/AboutSecurity](https://github.com/wgpsec/AboutSecurity). AboutSecurity downloads the current `master` branch archive directly from GitHub, extracts only its `skills/` directory, and registers the 249 discovered skills on enable. Download progress is shown and can be cancelled; enable/disable adds or removes the skill provider, and delete removes only the plugin-owned files. The repository does not include a detected license file or GitHub license declaration, so the deployment package stores only upstream links and does not redistribute the skill corpus or REA installation files.
+也可以完全退出 Harness 后手动复制和注册插件。下面的示例使用默认数据目录：
 
-## Automation (campaign ledger + fingerprint matching)
+```powershell
+# 创建目标目录并复制插件文件
+$pluginTarget = Join-Path $env:USERPROFILE '.dsh\local-plugins\dsh-prompt-custom'
+New-Item -ItemType Directory -Force -Path $pluginTarget | Out-Null
+Get-ChildItem -LiteralPath .\plugin -Force | ForEach-Object {
+  Copy-Item -LiteralPath $_.FullName -Destination $pluginTarget -Recurse -Force
+}
 
-Two local endpoints drive the loop without any network access:
+# 使用 Desktop 自带的命令行工具注册插件
+& "$env:LOCALAPPDATA\Programs\DeepSeek Harness\resources\runtime\cli\bin\dsh.cmd" plugin --profile desktop add $pluginTarget
+```
 
-- `POST /api/dsh-prompt-custom/match` — feed a port, banner or product name and get ranked knowledge-base hits with the reason each one matched (port 40 / product 30 / CVE 20 / keyword 20 / critical 5). The index is built from the corpus frontmatter at runtime, so new entries are matched immediately.
-- `/api/dsh-prompt-custom/campaigns` — a persisted campaign ledger in `$DSH_HOME/vuln-report/campaigns.json`: scope (domains/CIDRs/exclude), assets with fingerprints, steps, attempts, and a stage machine (recon → fingerprint → match → verify → exploit → lateral → report). `GET ?id=` also returns a `next` block with the next stage and, for every pending asset, the knowledge-base entries worth trying.
+手动安装如需采用附带的 `prompt-custom.json`，请先备份已有同名配置，再将其复制到 `$env:USERPROFILE\.dsh\prompt-custom.json`。完成后自行启动 Harness。
 
-The **渗透作业链** tab (Chinese stages: 信息收集 → 指纹识别 → 漏洞匹配 → 可行性验证 → 漏洞利用 → 横向移动 → 报告输出) shows campaigns, assets, the last steps and the next suggestion, with a one-click stage advance. A campaign can be **bound to one conversation**: the plugin then injects a `campaign:context` prompt section into that agent (task, stage, asset count, next suggestion) and, right after the user creates the campaign in a single-session window, calls `agent.followup(...)` so the agent starts working without another message. `bind` / `unbind` / `kick` are available over the campaigns endpoint; one conversation holds at most one campaign. **Campaigns can only be created from this tab by the user** — the HTTP route rejects creation calls without a same-origin browser marker (`sec-fetch-site`), and the `campaign_upsert` tool refuses to create one, so the agent can only record into a campaign the user opened. When `@deepseek-ai/dsh-tools` is resolvable the plugin also registers native tools (`kb_match`, `campaign_upsert`, `finding_upsert`, `pipeline_next`); when it is not, everything stays available over the same HTTP endpoints — no startup failure either way.
+## 插件界面与提示词配置
 
-## Knowledge base (CVE / PoC)
+插件在输入框附近提供“富江破甲”状态开关和设置入口，可以启用或关闭提示词注入。设置面板提供以下功能：
 
-**知识库** is bundled: `plugin/knowledge/` ships with the package, so enabling it performs no download, resolves no host, and touches no network. It ships **110 entries in nine model-invocable skills** registered through `skills.registerProvider`, so the agent sees them in its `available_skills` catalog and can load a category's body on demand:
+- **漏洞报告**：持久化保存 人工智能 写入的漏洞记录，按严重、高危、中危、低危、信息等等级查看。
+- **自定义提示词**：编辑提示词配置。
+- **技能库**：下载、启用或关闭 REA 与 AboutSecurity。
+- **知识库**：查看和使用内置 CVE / PoC 条目。
+- **渗透作业链**：管理任务、资产、验证步骤、阶段和后续建议。
 
-| Skill | Coverage |
+状态入口使用官方 `conversation.input.overlay` 扩展位置，避免占用输入区原有布局。启用自定义提示词注入时，插件以空段替代官方 `harness:identity` 开头；关闭后恢复官方开头，用户自己的提示词正文保持原样。
+
+## 技能库下载与 人工智能 调用
+
+技能库包含两个上游项目：
+
+- **REA 逆向分析工具**：[morluto/rea](https://github.com/morluto/rea)。
+- **AboutSecurity 安全评估技能库**：[wgpsec/AboutSecurity](https://github.com/wgpsec/AboutSecurity)。
+
+AboutSecurity 从 GitHub 下载当前 `master` 分支压缩包，仅提取 `skills/` 目录，启用后注册发现的技能。下载过程显示进度并支持取消；启用和关闭会增加或移除技能提供方，删除操作仅针对插件管理的下载文件。技能数量可能随上游更新而变化。
+
+本仓库通过上游链接按需下载技能库和 REA 安装文件，不附带其完整安装副本；使用第三方项目时适用各自的许可条件。
+
+REA 需要兼容的 Node.js 版本：`^22.23.4 || ^24.22.1 || >=26.12.1`。插件通过 npm 安装时关闭生命周期脚本，因此这种安装方式不会构建 Frida 的可选原生绑定。具体工具能否使用，还取决于相应运行环境和分析引擎是否具备。AboutSecurity 主要由 Markdown 技能文档组成，无需额外的原生运行组件。
+
+技能注册后，人工智能 可以在可用技能目录中发现并按需读取相关内容。是否实际调用某项技能，取决于会话、模型、工具配置和任务上下文；下载成功不等于每项工具都已完成运行验证。
+
+## 自动化作业链与指纹匹配
+
+插件提供本地指纹匹配和任务台账接口。匹配计算与台账写入在本机完成；技能下载、联网模型调用及实际目标验证可能产生网络请求。
+
+| 接口 | 用途 |
 | --- | --- |
-| `kb-java-deser` | Log4Shell, Spring4Shell, Struts2 S2-045, WebLogic T3 / wls-wsat / JNDI, Shiro rememberMe, Fastjson autoType, Java ECDSA psychic signatures |
-| `kb-java-web` | Confluence OGNL (pre-auth and post-auth), Confluence SSTI, Confluence setup-restore takeover, GitLab ExifTool, Jenkins CLI file read, TeamCity auth bypass, Solr Velocity, Tomcat AJP Ghostcat, Struts2 S2-066 |
-| `kb-edge-device` | PAN-OS GlobalProtect, Ivanti chain, Pulse file read, CitrixBleed, Citrix path traversal, FortiOS traversal / 2FA case bypass / XORtigate, F5 iControl |
-| `kb-exchange-ad` | ProxyLogon, ProxyShell, ProxyNotShell, ViewState, Zerologon, noPac, AD CS ESC1/ESC8, PrintNightmare, MS17-010, BlueKeep, Outlook NTLM leak |
-| `kb-web-cms` | Drupalgeddon2, Drupal REST, PHP-FPM underflow, PHP-CGI Windows, Laravel Ignition, ThinkPHP 5.x, vBulletin, Apache httpd traversal, Joomla config leak |
-| `kb-linux-priv` | PwnKit, Dirty Pipe, Baron Samedit, fs_context overflow, GameOver(lay), nf_tables, Looney Tunables, overlayfs |
-| `kb-cloud-container` | runc escape (2019-5736 and Leaky Vessels 2024-21626), cgroups release_agent, Docker API, K8s API proxy, Redis, PostgreSQL COPY, Nacos |
-| `kb-gray-market` | Grey-market site surface (21): source/backup/config leaks, client-side signature forgery, API BOLA, agent-hierarchy escalation, member PII enumeration, payment-notify forgery, withdrawal-approval IDOR, balance race/negative amounts, promotion idempotency, game-vendor callback forgery, predictable lottery PRNG, customer-service WebSocket, upload getshell, SMS bombing, RuoYi/Druid, Actuator, JWT, public OSS buckets, export path traversal, business SQLi, SSRF |
-| `kb-triage` | fingerprint-to-CVE workflow, safe verification and evidence rules, report template |
+| `POST /api/dsh-prompt-custom/match` | 输入端口、服务标识或产品名称，返回排序后的知识库候选条目及匹配原因。匹配权重包含端口 40、产品 30、CVE 20、关键词 20、严重级别 5。 |
+| `/api/dsh-prompt-custom/campaigns` | 管理测试范围、资产指纹、执行步骤、尝试记录和任务阶段。台账保存在 `$DSH_HOME/vuln-report/campaigns.json`。使用 `GET ?id=` 可读取任务及下一步建议。 |
 
-Entries are **public-material digests, not first-hand research**: every file carries `verified: false` and `sources:` in its frontmatter, and its 利用步骤 are hypotheses to be confirmed against the target version. Every entry is one Markdown file with a frontmatter block (`title`, `cve`, `severity`, `cvss`, `product`, `versions`, `ports`, `keywords`) and six sections: 指纹 / 前置条件 / PoC / 利用步骤 / 修复与缓解 / 参考. The provider's `get()` re-reads the file on every load, so editing the corpus takes effect on the next skill invocation without restarting DSH; only adding or removing a category needs a restart (the category list lives in `lib/knowledge.js`).
+作业链按以下阶段组织工作：
 
-Enable or disable it with the switch on the Skill Library page. The choice persists in `$DSH_HOME/fujiang-skills/knowledge-state.json` and the feature is **on by default**. Because the corpus ships with the package, there is no install button and no delete button — disabling removes the provider from the catalog and the files stay where they are.
+**信息收集 → 指纹识别 → 漏洞匹配 → 可行性验证 → 漏洞利用 → 横向移动 → 报告输出**
 
-REA requires a compatible Node.js version (`^22.23.4 || ^24.22.1 || >=26.12.1`). The installer uses npm with lifecycle scripts disabled. Static REA MCP tools and Windows packaged native support are available; Frida's optional native binding is not built by this install mode. AboutSecurity is a Markdown skill corpus and requires no extra runtime dependencies.
+每个任务可以绑定一个会话，一个会话最多绑定一个任务。插件通过 `campaign:context` 向绑定的 人工智能 提供任务、阶段、资产数量及后续建议，并可调用 `agent.followup(...)` 继续推进。任务接口提供 `bind`、`unbind`、`kick` 等操作。
 
-The badge uses the official `conversation.input.overlay` slot and takes no space in the composer stack. The workspace and agent preset controls retain their original spacing and position.
+当前实现由用户在插件面板中创建任务；人工智能 使用已有任务记录资产、步骤和结果。原生工具接口包括 `kb_match`、`campaign_upsert`、`finding_upsert`、`pipeline_next`，技能检索入口包括 `skill_search` 和 `skill_read`。原生工具注册依赖可解析的 DSH 工具服务，相应本地 HTTP 接口也提供功能入口。
 
-When custom prompt injection is active, the plugin shadows only the official `harness:identity` opener with an empty section. Your custom prompt text is left untouched. Disabling custom injection restores the official opener.
+任务可以记录目标、进度和完成标记。自动续跑默认最多 8 轮，并提供停滞判断与下一步建议。进度和阶段用于辅助组织任务，不等于漏洞已确认；漏洞报告仍应由验证结果和证据支持。
 
-The package declares compatibility with DSH and `dsh-system-prompt` `>=0.2.1-rc.5 <0.3.0`, and Cordis `>=4.0.5 <5`. DSH's plugin manager checks these declarations before installation.
+## 内置 CVE / PoC 知识库
 
-The plugin uses the public `systemPrompt`, `skills`, `tools`, agent lifecycle, and `webServer` services. It does not patch Harness files. Fully exit and restart DSH after installation.
+知识库文件位于 `plugin/knowledge/`，随插件提供，启用本身无需下载。知识内容按九个分类技能注册到 `skills.registerProvider`，人工智能 可以在 `available_skills` 目录发现它们并按需加载。
 
-## Private prompt config
+| 分类技能 | 主要覆盖内容 |
+| --- | --- |
+| `kb-java-deser` | Java 反序列化与相关组件问题，包括 Log4Shell、Spring4Shell、Struts2、WebLogic、Shiro、Fastjson、Java ECDSA 签名校验等。 |
+| `kb-java-web` | Java 与开发协作平台相关问题，包括 Confluence、GitLab、Jenkins、TeamCity、Solr、Tomcat、Struts2 等。 |
+| `kb-edge-device` | 边界设备相关问题，包括 PAN-OS、Ivanti、Pulse、Citrix、FortiOS、F5 等。 |
+| `kb-exchange-ad` | Exchange 与域环境相关问题，包括 ProxyLogon、ProxyShell、ProxyNotShell、Zerologon、AD CS、PrintNightmare、MS17-010、BlueKeep、Outlook 等。 |
+| `kb-web-cms` | 网站与内容管理系统相关问题，包括 Drupal、PHP、Laravel、ThinkPHP、vBulletin、Apache、Joomla 等。 |
+| `kb-linux-priv` | Linux 权限提升相关问题，包括 PwnKit、Dirty Pipe、Baron Samedit、文件系统上下文、nf_tables、Looney Tunables、overlayfs 等。 |
+| `kb-cloud-container` | 云与容器相关问题，包括 runc、cgroups、Docker API、Kubernetes、Redis、PostgreSQL、Nacos 等。 |
+| `kb-gray-market` | 业务站点与接口风险，包括源码及配置泄露、接口越权、账户层级、支付回调、并发与幂等性、上传、公开存储桶、导出路径、SQL 注入、SSRF 等。 |
+| `kb-triage` | 从指纹识别到 CVE 候选筛选、验证证据整理与报告模板。 |
 
-This bundle contains your current prompt configuration. Keep the archive private. Before sharing it, replace or remove `prompt-custom.json`.
+知识条目是对公开资料的整理，不应当作已经在当前目标上验证的结论。条目通过 `verified: false`、`sources:` 等元数据标记验证状态和来源，利用步骤须结合目标版本与前置条件复核。
+
+每个条目以 Markdown 文件保存，元数据包括 `title`、`cve`、`severity`、`cvss`、`product`、`versions`、`ports`、`keywords` 等，并包含指纹、前置条件、PoC、利用步骤、修复与缓解、参考资料等内容。加载条目时会重新读取文件，知识库内容更新后可在后续调用中生效；分类定义位于 `lib/knowledge.js`，调整分类后需要重新加载插件。
+
+知识库默认开启，开关状态保存在 `$DSH_HOME/fujiang-skills/knowledge-state.json`。关闭后停止向 人工智能 提供相关知识内容，原始文件仍保留在本地；由于知识库已经随包提供，不需要额外安装或下载。
+
+## 兼容性与验证范围
+
+插件声明兼容以下版本，安装时由 DSH 插件管理器检查：
+
+- DeepSeek Harness 与 `dsh-system-prompt`：`>=0.2.1-rc.5 <0.3.0`。
+- Cordis：`>=4.0.5 <5`。
+
+插件使用公开的 `systemPrompt`、`skills`、`tools`、智能体生命周期及 `webServer` 服务，不通过修改 Harness 程序文件安装。安装后需要完全退出并重新启动 Harness。
+
+当前版本已核对文件结构与安装逻辑，未重新完成全部功能的实际运行验证，不能据此承诺所有技能、CVE 条目或自动流程都可用。已知情况：免责声明弹窗关闭后的 Enter / Esc 监听仍可能影响输入和快捷键。
+
+## 提示词配置与免责声明
+
+`prompt-custom.json` 独立于插件程序文件，可能包含个人配置。安装、备份或再次分发时，请确认采用的是你希望使用或分享的版本。
+
+使用说明与责任边界请参阅 [免责声明](./DISCL人工智能MER.md)。项目名称及对 DeepSeek 的提及不代表官方背书。
+
+搜索关键词：**富江破甲、破甲、深度求索、人工智能安全评估、技能库、漏洞知识库**。
