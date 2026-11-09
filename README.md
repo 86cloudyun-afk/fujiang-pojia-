@@ -149,3 +149,22 @@ REA 需要兼容的 Node.js 版本：`^22.23.4 || ^24.22.1 || >=26.12.1`。插�
 使用说明与责任边界请参阅 [免责声明](./DISCLAIMER.md)。项目名称及对 DeepSeek 的提及不代表官方背书。
 
 搜索关键词：**富江破甲、破甲、深度求索、人工智能安全评估、技能库、漏洞知识库**。
+
+
+## 功能效果图
+
+### 自定义提示词
+
+![自定义提示词](./docs/screenshots/01-custom-prompt.png)
+
+### 技能库
+
+![技能库](./docs/screenshots/02-skills.png)
+
+### 知识库
+
+![知识库](./docs/screenshots/03-knowledge.png)
+
+### 渗透作业链
+
+![渗透作业链](./docs/screenshots/04-workflow.png)
