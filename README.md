@@ -14,7 +14,7 @@
 
 两条路径二选一：**A. DSH 桌面插件**（Windows，一键脚本），**B. omp 双通道**（推荐，实测出活）。
 
-`prompt-custom.json` 已升级为完整内核：配置为 `mode: replace`，启用后整段替换官方 `harness:identity` 身份段，不再追加拼接。内核正文约 12000 字符（实测 11075 字符，JSON 文件 12048 字节 UTF-8）。安装器对该文件做整文件覆盖，不做字段级合并。
+`prompt-custom.json` 已升级为完整内核：配置为 `mode: replace`，启用后整段替换官方 `harness:identity` 身份段，不再追加拼接。内核正文约 12000 字符（实测 11075 字符，JSON 文件 12049 字节 UTF-8）。安装器对该文件做整文件覆盖，不做字段级合并。
 
 ### 路径 A：DSH 插件（Windows 桌面）
 
