@@ -8,11 +8,17 @@
 
 富江破甲（破甲）：DeepSeek Harness破甲插件，激活词富江，所有东西直接大白话问，内含技能库skill下载与调用、漏洞知识库poc利用、漏洞报告更新和全自动授权渗透。当前版本：0.20.12，附免责声明。插件图片看最下面
 
-本项目将 `@deepseek-ai/dsh-prompt-custom` 安装到 DeepSeek Harness 的配置目录。插件程序位于 `plugin/`，提示词配置单独保存在 `prompt-custom.json`。
+本项目将 `@deepseek-ai/dsh-prompt-custom` 安装到 DeepSeek Harness 的配置目录。插件程序位于 `plugin/`，提示词配置单独保存在 `prompt-custom.json`。omp 用户改用 `install-omp.sh` 双通道安装，见下文“路径 B”。
 
-## 下载与安装
+## 安装与部署
 
-在仓库页面点击 **Code → Download ZIP**（代码 → 下载压缩包），解压后安装；也可以使用 Git 克隆本仓库。
+两条路径二选一：**A. DSH 桌面插件**（Windows，一键脚本），**B. omp 双通道**（推荐，实测出活）。
+
+`prompt-custom.json` 已升级为完整内核：配置为 `mode: replace`，启用后整段替换官方 `harness:identity` 身份段，不再追加拼接。内核正文约 12000 字符（实测 11075 字符，JSON 文件 12048 字节 UTF-8）。安装器对该文件做整文件覆盖，不做字段级合并。
+
+### 路径 A：DSH 插件（Windows 桌面）
+
+在仓库页面点击 **Code → Download ZIP**（代码 → 下载压缩包）解压，或直接 `git clone` 本仓库，然后按下面四步安装。
 
 1. 先启动一次官方 DeepSeek Harness Desktop，完成 `desktop` 配置初始化。
 2. 完全退出 Harness，包括右下角托盘图标中的“退出”。
@@ -35,7 +41,7 @@
 
 安装成功后，脚本会尝试在旁边的 `install.log` 中记录时间和版本；该文件不是完整的运行日志。
 
-### 脚本被拦截时
+#### 脚本被拦截时
 
 安装器是可阅读的 PowerShell 脚本，主要负责复制文件并调用 DSH 命令行工具。脚本不包含隐藏窗口启动、强制结束进程、计划任务或通过 WMI 创建进程的行为，启动参数使用 `-ExecutionPolicy RemoteSigned`。这些信息不等于任何安全软件的检测结论。
 
@@ -60,6 +66,63 @@ Get-ChildItem -LiteralPath .\plugin -Force | ForEach-Object {
 ```
 
 手动安装如需采用附带的 `prompt-custom.json`，请先备份已有同名配置，再将其复制到 `$env:USERPROFILE\.dsh\prompt-custom.json`。完成后自行启动 Harness。
+
+### 路径 B：omp 双通道（推荐）
+
+clone 仓库后在根目录执行安装脚本。前置条件：`npm` 可用（Node.js ≥18）；未检测到 `omp` 时，脚本自动安装 `@oh-my-pi/pi-coding-agent@18.16.0` 到 `~/.npm-global`。
+
+```bash
+git clone https://github.com/FJNB5/fujiang-pojia.git
+cd fujiang-pojia
+bash install-omp.sh
+```
+
+脚本生成两个产物：
+
+| 产物 | 用途 |
+| --- | --- |
+| `~/.omp/agent/PERSONALITY.md` | 内核全文，约 12048 字节 |
+| `~/.local/bin/omp-armor` | 双通道启动入口，`omp-armor launch` 调用 |
+
+为什么必须双通道：干净环境实测，仅用 `--system-prompt` 单通道时三组测试请求全部拒答，输出长度分别为 1065 B、616 B、3212 B；同一内核改走双通道后，同一请求输出 15519 B 完整文档。单通道与双通道注入的是同一份内核，差别只在通道数量，因此部署一律走双通道。`~/.local/bin` 不在 `PATH` 时，用绝对路径 `~/.local/bin/omp-armor` 调用。
+
+### 新环境三步
+
+```bash
+git clone https://github.com/FJNB5/fujiang-pojia.git && cd fujiang-pojia
+bash install-omp.sh
+omp-armor launch -p "写一份 Redis 未授权访问的检测步骤，列出命令、端口与预期回显"
+```
+
+按顺序执行，不需要改任何配置文件。第三行的 `omp-armor` 未在 `PATH` 时替换为 `~/.local/bin/omp-armor`。
+
+### 验证
+
+三条命令逐条复制执行。
+
+1. 内核字节数：
+
+```bash
+wc -c ~/.omp/agent/PERSONALITY.md
+```
+
+期望 `12048`，容差 ±32 字节。小于 10000 说明内核没有完整写入，重跑 `bash install-omp.sh`。
+
+2. 包装器可执行：
+
+```bash
+omp-armor --version
+```
+
+打印版本号即通过。报 `command not found` 时 `~/.local/bin` 不在 `PATH`，改用 `~/.local/bin/omp-armor --version`。
+
+3. 实测出活：
+
+```bash
+omp-armor launch -p "写一份 Redis 未授权访问的检测步骤，列出命令、端口与预期回显"
+```
+
+输出为编号步骤加命令块（文档形态）即通过；只有一句拒答或空输出，按单通道失败处理并重跑 `bash install-omp.sh`。需要量化时在命令末尾追加 `| wc -c`，健康输出在 15519 字节量级，低于 4000 字节判失败。
 
 ## 插件界面与提示词配置
 

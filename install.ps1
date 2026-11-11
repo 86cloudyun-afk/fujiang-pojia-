@@ -133,3 +133,69 @@ try {
 } catch { }
 
 Write-Step '现在打开 DeepSeek Harness 即可加载新版本。'
+
+# ==================== omp persona 双通道部署（追加段） ====================
+# 上方 DSH 插件安装逻辑保持不变。本段只写 omp 的两条注入通道：
+#   通道一 $HOME\.omp\agent\PERSONALITY.md  —— omp 启动时自动读取
+#   通道二 $HOME\.local\bin\omp-armor.cmd    —— 启动时注入 --system-prompt
+$armorRoot     = Join-Path $bundleRoot 'armor'
+$armorKernel   = Join-Path $armorRoot 'kernel.md'
+$armorContract = Join-Path $armorRoot 'contract.md'
+
+$kernelText   = ''
+$contractText = ''
+if (Test-Path -LiteralPath $armorKernel -PathType Leaf) {
+  $kernelText = [System.IO.File]::ReadAllText($armorKernel)
+}
+if (Test-Path -LiteralPath $armorContract -PathType Leaf) {
+  $contractText = [System.IO.File]::ReadAllText($armorContract)
+}
+
+$kernelBytes   = if (Test-Path -LiteralPath $armorKernel -PathType Leaf) { (Get-Item -LiteralPath $armorKernel).Length } else { 0 }
+$contractBytes = if (Test-Path -LiteralPath $armorContract -PathType Leaf) { (Get-Item -LiteralPath $armorContract).Length } else { 0 }
+if ($kernelBytes -lt 9000 -or $kernelText -notmatch 'Operating Specification' -or $kernelText -notmatch 'Boundaries') {
+  throw ('armor\kernel.md 缺失或不是完整内核 (' + $kernelBytes + ' bytes)。从仓库重新 clone 后再装。')
+}
+if ($contractBytes -lt 100 -or $contractText -notmatch 'Format contract') {
+  throw ('armor\contract.md 缺失或不完整 (' + $contractBytes + ' bytes)。从仓库重新 clone 后再装。')
+}
+
+$ompAgentDir   = Join-Path $HOME '.omp\agent'
+$ompPersonaDir = Join-Path $HOME '.pi\agent\personas'
+$ompBinDir     = Join-Path $HOME '.local\bin'
+New-Item -ItemType Directory -Force -Path $ompAgentDir, $ompPersonaDir, $ompBinDir | Out-Null
+
+Copy-Item -LiteralPath $armorKernel   -Destination (Join-Path $ompPersonaDir 'kernel.md')   -Force
+Copy-Item -LiteralPath $armorContract -Destination (Join-Path $ompPersonaDir 'contract.md') -Force
+
+$personalityPath = Join-Path $ompAgentDir 'PERSONALITY.md'
+$utf8NoBom = New-Object System.Text.UTF8Encoding($false)
+[System.IO.File]::WriteAllText($personalityPath, ($kernelText + "`r`n`r`n" + $contractText), $utf8NoBom)
+
+$ompCommand = Get-Command -Name 'omp' -ErrorAction SilentlyContinue | Select-Object -First 1
+if ($ompCommand) {
+  Write-Step ('omp 已就绪: ' + $ompCommand.Source)
+} else {
+  Write-Step '未检测到 omp；先执行 npm i -g @oh-my-pi/pi-coding-agent@18.16.0，再使用 omp-armor。'
+}
+
+$wrapperPs1 = Join-Path $ompBinDir 'omp-armor.ps1'
+$wrapperBody = @'
+$personaPath = Join-Path $HOME '.omp\agent\PERSONALITY.md'
+if (-not (Test-Path -LiteralPath $personaPath -PathType Leaf)) {
+  Write-Error ('omp-armor: persona file missing: ' + $personaPath)
+  exit 1
+}
+$persona = [System.IO.File]::ReadAllText($personaPath)
+& omp --system-prompt $persona @args
+exit $LASTEXITCODE
+'@
+[System.IO.File]::WriteAllText($wrapperPs1, $wrapperBody, $utf8NoBom)
+
+$wrapperCmd = Join-Path $ompBinDir 'omp-armor.cmd'
+$cmdBody = "@echo off`r`nsetlocal`r`npowershell -NoProfile -ExecutionPolicy Bypass -File `"%USERPROFILE%\.local\bin\omp-armor.ps1`" %*`r`nexit /b %ERRORLEVEL%`r`n"
+[System.IO.File]::WriteAllText($wrapperCmd, $cmdBody, (New-Object System.Text.ASCIIEncoding))
+
+Write-Step ('PERSONALITY: ' + $personalityPath + ' (' + (Get-Item -LiteralPath $personalityPath).Length + ' bytes)')
+Write-Step ('Wrapper    : ' + $wrapperCmd)
+Write-Step 'omp 双通道部署完成。'
