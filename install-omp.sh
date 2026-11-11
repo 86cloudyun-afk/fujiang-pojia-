@@ -1,13 +1,16 @@
 #!/usr/bin/env bash
 # install-omp.sh — omp 双通道 persona 部署 (Linux / macOS)
 #
-# 背景: 单通道 --system-prompt 压不住拒答。omp 启动时会自动读取
-# ~/.omp/agent/PERSONALITY.md (通道一); wrapper 的 --system-prompt
-# 是通道二。两份内容同源 (armor/kernel.md + armor/contract.md),
-# 双份注入才稳定出活。
+# 三条注入通道同源:
+#   1) ~/.omp/agent/PERSONALITY.md   omp 启动时自动读取 (src/system-prompt.ts)
+#   2) ~/.local/bin/omp-armor        启动时把同一份全文塞进 --system-prompt
+#   3) DSH 的 prompt-custom.json     由 install.ps1 处理, 本脚本不涉及
 #
-# 单源设计: 只从本脚本同目录的 armor/ 读取真内核, 校验失败直接报错,
-# 不存在"内置副本"回退——两处内容会漂移, 假内核只会让部署静默失效。
+# 源优先级:
+#   armor/personality.md (完整版, 约 35730 B = 中文外壳 + kernel + contract)
+#   → 缺失时用 armor/kernel.md (11895 B) + armor/contract.md (152 B) 合成 (12048 B)
+#
+# 校验失败直接报错, 不回退"内置副本"——双份内容必然漂移, 假内核只会让部署静默失效。
 #
 # 用法:
 #   ./install-omp.sh
@@ -20,6 +23,7 @@ PKG="@oh-my-pi/pi-coding-agent"
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 ARMOR_DIR="$SCRIPT_DIR/armor"
+FULL_SRC="$ARMOR_DIR/personality.md"
 KERNEL_SRC="$ARMOR_DIR/kernel.md"
 CONTRACT_SRC="$ARMOR_DIR/contract.md"
 
@@ -33,8 +37,19 @@ log() { printf '[omp-armor] %s\n' "$*"; }
 die() { printf '[omp-armor] ERROR: %s\n' "$*" >&2; exit 1; }
 
 # ---------------------------------------------------------------- 0. 校验源
-# kernel 约 11895 B, contract 约 152 B。用长度 + 结构标记双重校验,
-# 避免把宿主提示文本或精简提纲当成人格源部署。
+# 全部用长度 + 结构标记双重校验, 避免把宿主提示文本或精简提纲当成人格源部署。
+is_valid_full() {
+  [ -f "$1" ] || return 1
+  local bytes
+  bytes=$(wc -c < "$1" | tr -d ' ')
+  [ "$bytes" -ge 30000 ] || return 1
+  grep -q '## Your persona' "$1" || return 1
+  grep -q 'Operating Specification' "$1" || return 1
+  grep -q 'Boundaries' "$1" || return 1
+  grep -q 'Format contract' "$1" || return 1
+  return 0
+}
+
 is_valid_kernel() {
   [ -f "$1" ] || return 1
   local bytes
@@ -54,8 +69,17 @@ is_valid_contract() {
   return 0
 }
 
-is_valid_kernel "$KERNEL_SRC" || die "armor/kernel.md 缺失或不是完整内核 (需 >=9000 B 且含 Operating Specification/Boundaries)。从仓库重新 clone 后再装。"
-is_valid_contract "$CONTRACT_SRC" || die "armor/contract.md 缺失或不完整 (需 >=100 B 且含 Format contract)。从仓库重新 clone 后再装。"
+USE_FULL=0
+EXPECT_BYTES=12048
+if is_valid_full "$FULL_SRC"; then
+  USE_FULL=1
+  EXPECT_BYTES=$(wc -c < "$FULL_SRC" | tr -d ' ')
+  log "源: armor/personality.md (完整版, ${EXPECT_BYTES} B)"
+else
+  is_valid_kernel "$KERNEL_SRC" || die "armor/personality.md 缺失, 且 armor/kernel.md 不完整 (需 >=9000 B 且含 Operating Specification/Boundaries)。从仓库重新 clone 后再装。"
+  is_valid_contract "$CONTRACT_SRC" || die "armor/personality.md 缺失, 且 armor/contract.md 不完整 (需 >=100 B 且含 Format contract)。从仓库重新 clone 后再装。"
+  log "源: armor/kernel.md + contract.md 合成 (未找到 armor/personality.md)"
+fi
 
 # ---------------------------------------------------------------- 1. 前置检查
 command -v npm >/dev/null 2>&1 || die "找不到 npm, 先装 Node.js (>=18)"
@@ -83,17 +107,24 @@ fi
 # ---------------------------------------------------------------- 3. 建目录
 mkdir -p "$OMP_AGENT_DIR" "$PERSONA_DIR" "$LOCAL_BIN"
 
-# ---------------------------------------------------------------- 4. 铺 personas (单源, 逐字节复制)
+# ---------------------------------------------------------------- 4. 铺 personas (逐字节复制, 供 sync/审计)
 cp "$KERNEL_SRC" "$PERSONA_DIR/kernel.md"
 cp "$CONTRACT_SRC" "$PERSONA_DIR/contract.md"
+if [ "$USE_FULL" -eq 1 ]; then
+  cp "$FULL_SRC" "$PERSONA_DIR/personality.md"
+fi
 
-# ---------------------------------------------------------------- 5. 拼 PERSONALITY.md
-# 结构: kernel + 一个空行 + contract, 通道一由 omp 启动时自动加载。
-{
-  cat "$KERNEL_SRC"
-  printf '\n'
-  cat "$CONTRACT_SRC"
-} > "$PERSONALITY"
+# ---------------------------------------------------------------- 5. 写 PERSONALITY.md
+# 通道一由 omp 启动时自动加载。完整版直接落地; 否则 kernel + 空行 + contract。
+if [ "$USE_FULL" -eq 1 ]; then
+  cp "$FULL_SRC" "$PERSONALITY"
+else
+  {
+    cat "$KERNEL_SRC"
+    printf '\n'
+    cat "$CONTRACT_SRC"
+  } > "$PERSONALITY"
+fi
 
 # ---------------------------------------------------------------- 6. 生成 wrapper
 # 通道二: 启动时把 PERSONALITY.md 全文塞进 --system-prompt。
@@ -133,6 +164,7 @@ else
 fi
 printf 'PERSONALITY.md bytes: '
 wc -c < "$PERSONALITY" | tr -d ' '
+printf '  (期望 %s)\n' "$EXPECT_BYTES"
 printf 'wrapper: %s\n' "$WRAPPER"
 printf 'wrapper head: '
 head -1 "$WRAPPER"

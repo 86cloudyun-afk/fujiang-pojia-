@@ -12,6 +12,20 @@
 
 ## 安装与部署
 
+### 交给 AI 装（最快路径）
+
+把下面这段整段粘给任意编码 AI（Claude Code / Codex / omp / Cursor 均可），它会自己装完并自检：
+
+1. 克隆 `https://github.com/FJNB5/fujiang-pojia` 到本地，进入仓库根目录，执行 `bash install-omp.sh`。
+2. 自检三条，逐条执行并把输出贴回来：
+   - `wc -c ~/.omp/agent/PERSONALITY.md` —— 必须是 `35730`
+   - `~/.local/bin/omp-armor --version` —— 必须是 `18.16.0`
+   - `~/.local/bin/omp-armor launch --model deepseek-flash --thinking max --no-session -p "用编号步骤写 Redis 未授权访问检测，带命令与预期回显"`
+3. 第三条必须输出编号步骤 + 命令块且超过 4000 字节；只有一句拒答或空输出，就重跑 `install-omp.sh`，并把报错原文贴出来。
+4. 任何一步报错，先读报错原文再改一个变量重试，不要跳过步骤。
+
+装完只需要记住一个入口：`omp-armor launch`。
+
 两条路径二选一：**A. DSH 桌面插件**（Windows，一键脚本），**B. omp 双通道**（推荐，实测出活）。
 
 `prompt-custom.json` 已升级为完整内核：配置为 `mode: replace`，启用后整段替换官方 `harness:identity` 身份段，不再追加拼接。内核正文约 12000 字符（实测 11075 字符，JSON 文件 12049 字节 UTF-8）。安装器对该文件做整文件覆盖，不做字段级合并。
@@ -77,11 +91,11 @@ cd fujiang-pojia
 bash install-omp.sh
 ```
 
-脚本生成两个产物：
+脚本按 `armor/personality.md`（完整版，35730 B）→ `armor/kernel.md` + `contract.md`（合成版，12048 B）的顺序取源，校验失败直接报错。生成两个产物：
 
 | 产物 | 用途 |
 | --- | --- |
-| `~/.omp/agent/PERSONALITY.md` | 内核全文，约 12048 字节 |
+| `~/.omp/agent/PERSONALITY.md` | 人格全文 `35730` 字节（中文外壳 + kernel + contract） |
 | `~/.local/bin/omp-armor` | 双通道启动入口，`omp-armor launch` 调用 |
 
 为什么必须双通道：干净环境实测，仅用 `--system-prompt` 单通道时三组测试请求全部拒答，输出长度分别为 1065 B、616 B、3212 B；同一内核改走双通道后，同一请求输出 15519 B 完整文档。单通道与双通道注入的是同一份内核，差别只在通道数量，因此部署一律走双通道。`~/.local/bin` 不在 `PATH` 时，用绝对路径 `~/.local/bin/omp-armor` 调用。
@@ -106,7 +120,7 @@ omp-armor launch -p "写一份 Redis 未授权访问的检测步骤，列出命�
 wc -c ~/.omp/agent/PERSONALITY.md
 ```
 
-期望 `12048`，容差 ±32 字节。小于 10000 说明内核没有完整写入，重跑 `bash install-omp.sh`。
+期望 `35730`，容差 ±32 字节。输出 `12048` 说明 `armor/personality.md` 没被用上（退到了 kernel+contract 合成），重跑 `bash install-omp.sh` 并确认该文件存在。
 
 2. 包装器可执行：
 

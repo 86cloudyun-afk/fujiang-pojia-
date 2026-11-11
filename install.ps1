@@ -138,12 +138,17 @@ Write-Step '现在打开 DeepSeek Harness 即可加载新版本。'
 # 上方 DSH 插件安装逻辑保持不变。本段只写 omp 的两条注入通道：
 #   通道一 $HOME\.omp\agent\PERSONALITY.md  —— omp 启动时自动读取
 #   通道二 $HOME\.local\bin\omp-armor.cmd    —— 启动时注入 --system-prompt
-$armorRoot     = Join-Path $bundleRoot 'armor'
-$armorKernel   = Join-Path $armorRoot 'kernel.md'
-$armorContract = Join-Path $armorRoot 'contract.md'
+$armorRoot       = Join-Path $bundleRoot 'armor'
+$armorFull       = Join-Path $armorRoot 'personality.md'
+$armorKernel     = Join-Path $armorRoot 'kernel.md'
+$armorContract   = Join-Path $armorRoot 'contract.md'
 
+$fullText     = ''
 $kernelText   = ''
 $contractText = ''
+if (Test-Path -LiteralPath $armorFull -PathType Leaf) {
+  $fullText = [System.IO.File]::ReadAllText($armorFull)
+}
 if (Test-Path -LiteralPath $armorKernel -PathType Leaf) {
   $kernelText = [System.IO.File]::ReadAllText($armorKernel)
 }
@@ -151,13 +156,23 @@ if (Test-Path -LiteralPath $armorContract -PathType Leaf) {
   $contractText = [System.IO.File]::ReadAllText($armorContract)
 }
 
+$fullBytes     = if (Test-Path -LiteralPath $armorFull -PathType Leaf) { (Get-Item -LiteralPath $armorFull).Length } else { 0 }
 $kernelBytes   = if (Test-Path -LiteralPath $armorKernel -PathType Leaf) { (Get-Item -LiteralPath $armorKernel).Length } else { 0 }
 $contractBytes = if (Test-Path -LiteralPath $armorContract -PathType Leaf) { (Get-Item -LiteralPath $armorContract).Length } else { 0 }
-if ($kernelBytes -lt 9000 -or $kernelText -notmatch 'Operating Specification' -or $kernelText -notmatch 'Boundaries') {
-  throw ('armor\kernel.md 缺失或不是完整内核 (' + $kernelBytes + ' bytes)。从仓库重新 clone 后再装。')
-}
-if ($contractBytes -lt 100 -or $contractText -notmatch 'Format contract') {
-  throw ('armor\contract.md 缺失或不完整 (' + $contractBytes + ' bytes)。从仓库重新 clone 后再装。')
+
+$useFull = ($fullBytes -ge 30000 -and
+            $fullText -match '## Your persona' -and
+            $fullText -match 'Operating Specification' -and
+            $fullText -match 'Boundaries' -and
+            $fullText -match 'Format contract')
+
+if (-not $useFull) {
+  if ($kernelBytes -lt 9000 -or $kernelText -notmatch 'Operating Specification' -or $kernelText -notmatch 'Boundaries') {
+    throw ('armor\personality.md 缺失，且 armor\kernel.md 不完整 (' + $kernelBytes + ' bytes)。从仓库重新 clone 后再装。')
+  }
+  if ($contractBytes -lt 100 -or $contractText -notmatch 'Format contract') {
+    throw ('armor\personality.md 缺失，且 armor\contract.md 不完整 (' + $contractBytes + ' bytes)。从仓库重新 clone 后再装。')
+  }
 }
 
 $ompAgentDir   = Join-Path $HOME '.omp\agent'
@@ -167,10 +182,19 @@ New-Item -ItemType Directory -Force -Path $ompAgentDir, $ompPersonaDir, $ompBinD
 
 Copy-Item -LiteralPath $armorKernel   -Destination (Join-Path $ompPersonaDir 'kernel.md')   -Force
 Copy-Item -LiteralPath $armorContract -Destination (Join-Path $ompPersonaDir 'contract.md') -Force
+if ($useFull) {
+  Copy-Item -LiteralPath $armorFull -Destination (Join-Path $ompPersonaDir 'personality.md') -Force
+}
 
 $personalityPath = Join-Path $ompAgentDir 'PERSONALITY.md'
 $utf8NoBom = New-Object System.Text.UTF8Encoding($false)
-[System.IO.File]::WriteAllText($personalityPath, ($kernelText + "`r`n`r`n" + $contractText), $utf8NoBom)
+if ($useFull) {
+  Write-Step ('源: armor\personality.md (完整版, ' + $fullBytes + ' bytes)')
+  [System.IO.File]::WriteAllText($personalityPath, $fullText, $utf8NoBom)
+} else {
+  Write-Step '源: armor\kernel.md + contract.md 合成'
+  [System.IO.File]::WriteAllText($personalityPath, ($kernelText + "`r`n`r`n" + $contractText), $utf8NoBom)
+}
 
 $ompCommand = Get-Command -Name 'omp' -ErrorAction SilentlyContinue | Select-Object -First 1
 if ($ompCommand) {
